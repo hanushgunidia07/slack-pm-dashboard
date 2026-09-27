@@ -10,7 +10,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
 
-  const API_URL = "http://localhost:8000/api";
+  const API_URL = "https://slack-pm-dashboard.onrender.com";
 
   const fetchReviews = async () => {
     try {
