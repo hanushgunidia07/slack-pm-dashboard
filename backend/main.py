@@ -123,3 +123,14 @@ async def clear_database():
     else:
         memory_db.clear()
     return {"status": "success", "message": "All reviews cleared"}
+
+# NEW: Delete specific file source route
+@app.delete("/api/reviews/source/{source_name}")
+async def clear_specific_source(source_name: str):
+    """Clears records originating from a specific uploaded CSV file."""
+    if use_mongo:
+        collection.delete_many({"source_file": source_name})
+    else:
+        # Modify the in-memory list in place to remove the specific source
+        memory_db[:] = [r for r in memory_db if r.get("source_file") != source_name]
+    return {"status": "success", "message": f"Cleared data for {source_name}"}

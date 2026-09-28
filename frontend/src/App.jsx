@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List, Download, Search } from 'lucide-react';
+import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List, Download, Search, Database, FileText } from 'lucide-react';
 
 export default function App() {
   const [reviews, setReviews] = useState([]);
@@ -62,11 +62,24 @@ export default function App() {
   };
 
   const handleClear = async () => {
-    if (window.confirm("Are you sure you want to clear all data?")) {
+    if (window.confirm("Are you sure you want to clear ALL data? This cannot be undone.")) {
       await axios.delete(`${API_URL}/reviews/clear`);
       setActiveFilter(null);
       setSearchQuery("");
       fetchReviews();
+    }
+  };
+
+  // NEW: Delete individual file data
+  const handleDeleteSource = async (source) => {
+    if (window.confirm(`Are you sure you want to delete all data imported from "${source}"?`)) {
+      try {
+        await axios.delete(`${API_URL}/reviews/source/${source}`);
+        setActiveFilter(null);
+        fetchReviews();
+      } catch (err) {
+        alert("Error deleting file data.");
+      }
     }
   };
 
@@ -108,17 +121,21 @@ export default function App() {
     return matchesFilter && matchesSearch;
   });
 
+  // NEW: Extract unique files for the Manage tab
+  const uniqueSources = [...new Set(reviews.map(r => r.source_file).filter(Boolean))];
+
   const handleExportCSV = () => {
     if (displayedReviews.length === 0) {
       alert("No data to export!");
       return;
     }
-    const headers = ["Sentiment", "Review Text", "Extracted Features"];
+    const headers = ["Sentiment", "Review Text", "Extracted Features", "Source File"];
     const csvRows = displayedReviews.map(r => {
       const sentiment = r.sentiment || "unknown";
       const text = r.text ? `"${r.text.replace(/"/g, '""')}"` : "";
       const features = r.features && r.features.length ? `"${r.features.join(", ")}"` : "none";
-      return `${sentiment},${text},${features}`;
+      const source = r.source_file ? `"${r.source_file}"` : "unknown";
+      return `${sentiment},${text},${features},${source}`;
     });
     const csvContent = [headers.join(","), ...csvRows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -152,7 +169,7 @@ export default function App() {
               <Download size={16} /> Export CSV
             </button>
             <button onClick={handleClear} className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 text-sm font-medium transition-colors">
-              <Trash2 size={16} /> Clear Data
+              <Trash2 size={16} /> Clear All
             </button>
           </div>
         </div>
@@ -203,7 +220,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 3. Controls: Single Input & Batch CSV */}
+        {/* 3. Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <form onSubmit={handleSingleSubmit} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-4">
             <div>
@@ -245,18 +262,25 @@ export default function App() {
         </div>
 
         {/* 4. Tab Navigation */}
-        <div className="flex space-x-2 border-b border-slate-200 pb-px">
+        <div className="flex space-x-2 border-b border-slate-200 pb-px overflow-x-auto">
           <button 
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'overview' ? 'text-purple-700 bg-white border-t border-l border-r border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'overview' ? 'text-purple-700 bg-white border-t border-l border-r border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
           >
             <BarChart2 size={16} /> Dashboard Overview
           </button>
           <button 
             onClick={() => setActiveTab('data')}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${activeTab === 'data' ? 'text-purple-700 bg-white border-t border-l border-r border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'data' ? 'text-purple-700 bg-white border-t border-l border-r border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
           >
             <List size={16} /> Context Feed Table
+          </button>
+          {/* NEW: Manage Files Tab */}
+          <button 
+            onClick={() => setActiveTab('manage')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'manage' ? 'text-purple-700 bg-white border-t border-l border-r border-slate-200 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'}`}
+          >
+            <Database size={16} /> Manage Files
           </button>
         </div>
 
@@ -369,6 +393,38 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* 7. NEW Tab Content: Manage Files */}
+        {activeTab === 'manage' && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-lg font-semibold text-slate-800 mb-2">Uploaded Files</h2>
+            <p className="text-sm text-slate-500 mb-6">Manage datasets currently driving your telemetry metrics. Deleting a file removes all its associated reviews without affecting other data.</p>
+            
+            {uniqueSources.length > 0 ? (
+              <ul className="space-y-3">
+                {uniqueSources.map(source => (
+                  <li key={source} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50 p-4 rounded-xl border border-slate-100 gap-4 transition-colors hover:border-purple-200">
+                    <span className="text-sm font-medium text-slate-700 flex items-center gap-3">
+                       <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm"><FileText size={16} className="text-purple-600"/></div> 
+                       {source === "manual_entry" ? "Manual Single Entries" : source}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteSource(source)}
+                      className="text-rose-600 hover:text-white hover:bg-rose-500 border border-rose-200 hover:border-rose-500 flex items-center gap-2 text-xs font-semibold px-4 py-2 bg-white rounded-lg transition-colors shadow-sm"
+                    >
+                      <Trash2 size={14} /> Delete Dataset
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                <Database className="mx-auto text-slate-300 mb-3" size={32} />
+                <p className="text-sm font-medium text-slate-500">No active files in the database.</p>
+              </div>
+            )}
           </div>
         )}
 
