@@ -9,7 +9,7 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
-  const [searchQuery, setSearchQuery] = useState(""); // NEW search state
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState('overview');
 
   const API_URL = "https://slack-pm-dashboard.onrender.com/api";
@@ -70,11 +70,15 @@ export default function App() {
     }
   };
 
+  // Upgraded Sentiment Math for Progress Bars
   const total = reviews.length;
   const positiveCount = reviews.filter(r => r.sentiment === 'positive').length;
   const negativeCount = reviews.filter(r => r.sentiment === 'negative').length;
   const neutralCount = reviews.filter(r => r.sentiment === 'neutral').length;
+  
   const positivePercentage = total > 0 ? Math.round((positiveCount / total) * 100) : 0;
+  const negativePercentage = total > 0 ? Math.round((negativeCount / total) * 100) : 0;
+  const neutralPercentage = total > 0 ? 100 - positivePercentage - negativePercentage : 0; // Ensures perfect 100% total
 
   const pieData = [
     { name: 'Positive', value: positiveCount, color: '#10b981' },
@@ -98,7 +102,6 @@ export default function App() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 7);
 
-  // UPGRADED FILTERING LOGIC: Combines Tag Filter + Text Search
   const displayedReviews = reviews.filter(r => {
     const matchesFilter = activeFilter ? r.features && r.features.includes(activeFilter) : true;
     const matchesSearch = searchQuery ? (r.text || "").toLowerCase().includes(searchQuery.toLowerCase()) : true;
@@ -164,12 +167,20 @@ export default function App() {
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><MessageSquare size={20} /></div>
           </div>
           
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Positive Sentiment</p>
-              <h3 className="text-2xl font-bold text-slate-800 mt-1">{positivePercentage}%</h3>
+          {/* UPGRADED: Sentiment Health Progress Bars */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-center">
+            <div className="flex justify-between items-start mb-3">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Sentiment Health</p>
+                <h3 className="text-2xl font-bold text-slate-800 mt-1">{positivePercentage}% <span className="text-xs font-normal text-slate-500 ml-1">Positive</span></h3>
+              </div>
+              <div className="p-2 bg-slate-50 text-slate-400 rounded-lg"><Smile size={18} /></div>
             </div>
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl"><Smile size={20} /></div>
+            <div className="w-full h-2 flex rounded-full overflow-hidden bg-slate-100">
+              <div style={{ width: `${positivePercentage}%` }} className="bg-emerald-500 transition-all duration-500" title="Positive"></div>
+              <div style={{ width: `${neutralPercentage}%` }} className="bg-slate-400 transition-all duration-500" title="Neutral"></div>
+              <div style={{ width: `${negativePercentage}%` }} className="bg-rose-500 transition-all duration-500" title="Negative"></div>
+            </div>
           </div>
 
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
@@ -296,8 +307,6 @@ export default function App() {
         {/* 6. Tab Content: Data (Table) */}
         {activeTab === 'data' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            
-            {/* UPGRADED TABLE HEADER: Live Search Bar */}
             <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 Raw Telemetry 
