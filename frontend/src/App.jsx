@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List, Download } from 'lucide-react';
+import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List, Download, Search } from 'lucide-react';
 
 export default function App() {
   const [reviews, setReviews] = useState([]);
@@ -9,7 +9,8 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // New tab state for UI
+  const [searchQuery, setSearchQuery] = useState(""); // NEW search state
+  const [activeTab, setActiveTab] = useState('overview');
 
   const API_URL = "https://slack-pm-dashboard.onrender.com/api";
 
@@ -64,11 +65,11 @@ export default function App() {
     if (window.confirm("Are you sure you want to clear all data?")) {
       await axios.delete(`${API_URL}/reviews/clear`);
       setActiveFilter(null);
+      setSearchQuery("");
       fetchReviews();
     }
   };
 
-  // Metrics Calculation (Unchanged)
   const total = reviews.length;
   const positiveCount = reviews.filter(r => r.sentiment === 'positive').length;
   const negativeCount = reviews.filter(r => r.sentiment === 'negative').length;
@@ -76,9 +77,9 @@ export default function App() {
   const positivePercentage = total > 0 ? Math.round((positiveCount / total) * 100) : 0;
 
   const pieData = [
-    { name: 'Positive', value: positiveCount, color: '#10b981' }, // Emerald
-    { name: 'Negative', value: negativeCount, color: '#f43f5e' }, // Rose
-    { name: 'Neutral', value: neutralCount, color: '#94a3b8' }    // Slate
+    { name: 'Positive', value: positiveCount, color: '#10b981' },
+    { name: 'Negative', value: negativeCount, color: '#f43f5e' },
+    { name: 'Neutral', value: neutralCount, color: '#94a3b8' }
   ];
 
   const featureCounts = {};
@@ -97,29 +98,25 @@ export default function App() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 7);
 
-  const displayedReviews = activeFilter
-    ? reviews.filter(r => r.features && r.features.includes(activeFilter))
-    : reviews;
+  // UPGRADED FILTERING LOGIC: Combines Tag Filter + Text Search
+  const displayedReviews = reviews.filter(r => {
+    const matchesFilter = activeFilter ? r.features && r.features.includes(activeFilter) : true;
+    const matchesSearch = searchQuery ? (r.text || "").toLowerCase().includes(searchQuery.toLowerCase()) : true;
+    return matchesFilter && matchesSearch;
+  });
 
-  // NEW EXPORT FUNCTION
   const handleExportCSV = () => {
     if (displayedReviews.length === 0) {
       alert("No data to export!");
       return;
     }
-
-    // 1. Create CSV headers
     const headers = ["Sentiment", "Review Text", "Extracted Features"];
-    
-    // 2. Format the data rows safely
     const csvRows = displayedReviews.map(r => {
       const sentiment = r.sentiment || "unknown";
-      const text = r.text ? `"${r.text.replace(/"/g, '""')}"` : ""; // Escape quotes to prevent breaks
+      const text = r.text ? `"${r.text.replace(/"/g, '""')}"` : "";
       const features = r.features && r.features.length ? `"${r.features.join(", ")}"` : "none";
       return `${sentiment},${text},${features}`;
     });
-
-    // 3. Combine and trigger download
     const csvContent = [headers.join(","), ...csvRows].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -148,12 +145,9 @@ export default function App() {
             <button onClick={fetchReviews} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition-colors">
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh
             </button>
-            
-            {/* NEW EXPORT BUTTON */}
             <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 text-sm font-medium transition-colors">
               <Download size={16} /> Export CSV
             </button>
-
             <button onClick={handleClear} className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 text-sm font-medium transition-colors">
               <Trash2 size={16} /> Clear Data
             </button>
@@ -221,8 +215,6 @@ export default function App() {
               <label className="text-sm font-semibold text-slate-800">Batch Upload CSV</label>
               <p className="text-xs text-slate-500 mt-1">Upload App Store or G2 reviews. Must contain a 'review' or 'text' column.</p>
             </div>
-            
-            {/* New Drag & Drop Zone UI */}
             <div className="relative border-2 border-dashed border-slate-300 hover:border-purple-400 bg-slate-50 hover:bg-purple-50/50 transition-colors rounded-xl p-6 text-center flex flex-col items-center justify-center cursor-pointer group h-24">
               <input 
                 type="file" 
@@ -235,7 +227,6 @@ export default function App() {
                 {file ? file.name : "Drop CSV file here or click to browse"}
               </span>
             </div>
-
             <button type="submit" disabled={!file || loading} className="flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <Activity size={16} /> Run Pandas ETL & Ingest
             </button>
@@ -305,20 +296,34 @@ export default function App() {
         {/* 6. Tab Content: Data (Table) */}
         {activeTab === 'data' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            
+            {/* UPGRADED TABLE HEADER: Live Search Bar */}
+            <div className="p-5 bg-slate-50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                 Raw Telemetry 
-                {activeFilter && <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full">Filter: #{activeFilter}</span>}
+                {activeFilter && (
+                  <span className="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full flex items-center gap-2">
+                    Filter: #{activeFilter}
+                    <button onClick={() => setActiveFilter(null)} className="hover:text-purple-900 font-bold">&times;</button>
+                  </span>
+                )}
               </h2>
-              {activeFilter && (
-                <button onClick={() => setActiveFilter(null)} className="text-xs text-slate-500 hover:text-slate-800 underline font-medium">
-                  Clear Filter
-                </button>
-              )}
+              
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Search feedback keywords..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white transition-all shadow-sm"
+                />
+              </div>
             </div>
+
             <div className="max-h-96 overflow-y-auto">
               <table className="w-full text-left text-sm">
-                <thead className="bg-white text-slate-500 sticky top-0 shadow-sm">
+                <thead className="bg-white text-slate-500 sticky top-0 shadow-sm z-10">
                   <tr>
                     <th className="p-4 font-semibold w-24">Sentiment</th>
                     <th className="p-4 font-semibold">Review Feedback</th>
@@ -349,7 +354,7 @@ export default function App() {
                     </tr>
                   )) : (
                     <tr>
-                      <td colSpan="3" className="p-8 text-center text-slate-400">No data matches the current filter.</td>
+                      <td colSpan="3" className="p-8 text-center text-slate-400">No data matches your search or filter.</td>
                     </tr>
                   )}
                 </tbody>
