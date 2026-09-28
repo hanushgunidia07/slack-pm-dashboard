@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List } from 'lucide-react';
+import { Trash2, Send, Upload, RefreshCw, MessageSquare, Hash, Smile, Activity, BarChart2, List, Download } from 'lucide-react';
 
 export default function App() {
   const [reviews, setReviews] = useState([]);
@@ -101,6 +101,36 @@ export default function App() {
     ? reviews.filter(r => r.features && r.features.includes(activeFilter))
     : reviews;
 
+  // NEW EXPORT FUNCTION
+  const handleExportCSV = () => {
+    if (displayedReviews.length === 0) {
+      alert("No data to export!");
+      return;
+    }
+
+    // 1. Create CSV headers
+    const headers = ["Sentiment", "Review Text", "Extracted Features"];
+    
+    // 2. Format the data rows safely
+    const csvRows = displayedReviews.map(r => {
+      const sentiment = r.sentiment || "unknown";
+      const text = r.text ? `"${r.text.replace(/"/g, '""')}"` : ""; // Escape quotes to prevent breaks
+      const features = r.features && r.features.length ? `"${r.features.join(", ")}"` : "none";
+      return `${sentiment},${text},${features}`;
+    });
+
+    // 3. Combine and trigger download
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `slack_telemetry_${activeFilter || 'all'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -118,6 +148,12 @@ export default function App() {
             <button onClick={fetchReviews} className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition-colors">
               <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh
             </button>
+            
+            {/* NEW EXPORT BUTTON */}
+            <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 text-sm font-medium transition-colors">
+              <Download size={16} /> Export CSV
+            </button>
+
             <button onClick={handleClear} className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 text-sm font-medium transition-colors">
               <Trash2 size={16} /> Clear Data
             </button>
