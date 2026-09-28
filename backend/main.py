@@ -63,7 +63,8 @@ async def upload_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only CSV files are supported.")
 
     contents = await file.read()
-    df = pd.read_csv(io.BytesIO(contents))
+    # The fix: safely skip broken CSV rows instead of crashing
+    df = pd.read_csv(io.BytesIO(contents), on_bad_lines='skip')
 
     # Auto-detect the text column (e.g., 'review_text', 'review', 'text', 'comment')
     text_col = None
